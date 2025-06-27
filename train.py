@@ -41,7 +41,7 @@ def train():
     train_dataset = IAMDataset(split="train")
     val_dataset = IAMDataset(split="validation")
 
-    batch_size = 1
+    batch_size = 4
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=0)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=0)
     print(f"✅ Loaded {len(train_dataset)} training and {len(val_dataset)} validation samples.")

@@ -3,12 +3,12 @@ warnings.filterwarnings("ignore", category=UserWarning, module="transformers.*")
 warnings.filterwarnings("ignore", category=FutureWarning, module="transformers.*")
 warnings.filterwarnings("ignore", category=FutureWarning, module="evaluate.*")
 
+import os
 import torch
 from torch.utils.data import DataLoader
 from evaluate import load
 from data_loader import IAMDataset
-from train import HybridHTR
-import os
+from train2 import HybridHTR  # Make sure this matches your main train script
 
 def evaluate(checkpoint_path="checkpoints/model_epoch_10.pt"):
     print("📝 Evaluating...")
@@ -16,8 +16,9 @@ def evaluate(checkpoint_path="checkpoints/model_epoch_10.pt"):
     print(f"Device: {device}")
 
     if not os.path.exists(checkpoint_path):
-        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}. Run train.py first.")
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}. Run training first.")
 
+    # Load model and weights
     try:
         model = HybridHTR().to(device)
         model.load_state_dict(torch.load(checkpoint_path, map_location=device))
@@ -26,6 +27,7 @@ def evaluate(checkpoint_path="checkpoints/model_epoch_10.pt"):
     except Exception as e:
         raise Exception(f"Model load failed: {e}")
 
+    # Load validation dataset
     try:
         val_dataset = IAMDataset(split="validation")
         val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False, num_workers=0)
@@ -33,6 +35,7 @@ def evaluate(checkpoint_path="checkpoints/model_epoch_10.pt"):
     except Exception as e:
         raise Exception(f"Dataset load failed: {e}")
 
+    # Load evaluation metrics
     try:
         cer_metric = load("cer")
         wer_metric = load("wer")
@@ -51,25 +54,30 @@ def evaluate(checkpoint_path="checkpoints/model_epoch_10.pt"):
             try:
                 pixel_values = batch["pixel_values"].to(device)
                 labels = batch["labels"].to(device)
+
                 outputs = model(pixel_values, labels=labels)
                 predicted_ids = outputs.logits.argmax(-1)
+
                 predicted_texts = val_dataset.processor.batch_decode(predicted_ids, skip_special_tokens=True)
                 true_texts = val_dataset.processor.batch_decode(labels, skip_special_tokens=True)
+
                 cer_score += cer_metric.compute(predictions=predicted_texts, references=true_texts)
                 wer_score += wer_metric.compute(predictions=predicted_texts, references=true_texts)
                 valid_batches += 1
+
             except Exception as e:
-                print(f"Batch error: {e}")
+                print(f"⚠️ Batch skipped due to error: {e}")
                 continue
 
     if valid_batches == 0:
-        raise ValueError("No valid batches processed.")
+        raise ValueError("No valid batches processed during evaluation.")
 
-    print(f"Validation CER: {cer_score/valid_batches:.4f}")
-    print(f"Validation WER: {wer_score/valid_batches:.4f}")
+    print(f"\n📊 Final Evaluation Metrics:")
+    print(f"✅ Validation CER: {cer_score / valid_batches:.4f}")
+    print(f"✅ Validation WER: {wer_score / valid_batches:.4f}")
 
 if __name__ == "__main__":
     try:
         evaluate()
     except Exception as e:
-        print(f"Evaluation failed: {e}")
+        print(f"❌ Evaluation failed: {e}")
